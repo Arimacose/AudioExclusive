@@ -1,0 +1,20 @@
+name: Build macOS Universal
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and check Universal application
+        working-directory: backend-source/macos-source
+        run: bash build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AudioExclusive-macOS-universal
+          path: backend-source/macos-source/build/AudioExclusive-macOS-universal.zip
+          if-no-files-found: error

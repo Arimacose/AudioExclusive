@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>AudioExclusive</string>
+<key>CFBundleIdentifier</key><string>io.audioexclusive.companion</string>
+<key>CFBundleName</key><string>AudioExclusive</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>2026.11.08</string>
+<key>CFBundleVersion</key><string>1</string>
+<key>LSMinimumSystemVersion</key><string>14.2</string>
+<key>NSAudioCaptureUsageDescription</key><string>仅捕获您选择的 Apple Music 或网易云音频，以输出到您选择的独占设备。不录制或上传音频。</string>
+<key>NSHighResolutionCapable</key><true/>
+</dict></plist>

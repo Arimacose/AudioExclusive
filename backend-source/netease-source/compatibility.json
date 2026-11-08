@@ -1,0 +1,59 @@
+{
+  "version": "3.1.41.205564",
+  "architecture": "x64",
+  "profile": "actual native music renderer, verified 2026-10-13",
+  "fingerprints": {
+    "cloudmusic.exe": "9bc367409cd571de11ff814636ce665eac762452e7e0763a1debc39792344f0a",
+    "cloudmusic.dll": "d1b6d5da6143d414f6cdc54c5ca156617dfbb411a738768903bcb7393b6dba99",
+    "libcef.dll": "a2a441490a9600f7e06b8c4dc609354ff7214add445a55c8fa699760d264e210"
+  },
+  "module": "cloudmusic.dll",
+  "nativeOpenRva": "0x108f950",
+  "nativeOpenFirst16Bytes": "488954241048894c2408555657b8901f",
+  "waveToAudioFormatRva": "0x10940a0",
+  "shareModeOffset": "0x158",
+  "nativeWaveFormatOffset": "0x130",
+  "nativeOutputAudioFormatOffset": "0xe8",
+  "observedInitializeCallReturnRva": "0x109062b",
+  "note": "This JSON documents the compiled profile. Changing it does not enable another client version.",
+  "profiles": [
+    {
+      "version": "3.1.36.205322",
+      "architecture": "x64",
+      "profile": "actual native music renderer, verified 2026-10-13",
+      "fingerprints": {
+        "cloudmusic.exe": "1b86292da1056a729226df9205eb9f69c1e5558bc3eddbe0639c06a2443bf2d3",
+        "cloudmusic.dll": "98874023cab8d13f4e7e3fbc74fbc30186529039593e1359a189878ece35029f",
+        "libcef.dll": "724b3e35edb5905540877fa8d7a8583a2503599639d7c79ccef6faa8e5a6bc49"
+      },
+      "module": "cloudmusic.dll",
+      "nativeOpenRva": "0x106bd70",
+      "nativeOpenFirst16Bytes": "488954241048894c2408555657b8901f",
+      "waveToAudioFormatRva": "0x10704c0",
+      "shareModeOffset": "0x158",
+      "nativeWaveFormatOffset": "0x130",
+      "nativeOutputAudioFormatOffset": "0xe8",
+      "observedInitializeCallReturnRva": "0x106ca4b",
+      "note": "This JSON documents the compiled profile. Changing it does not enable another client version."
+    },
+    {
+      "version": "3.1.41.205564",
+      "architecture": "x64",
+      "profile": "actual native music renderer, verified 2026-10-13",
+      "fingerprints": {
+        "cloudmusic.exe": "9bc367409cd571de11ff814636ce665eac762452e7e0763a1debc39792344f0a",
+        "cloudmusic.dll": "d1b6d5da6143d414f6cdc54c5ca156617dfbb411a738768903bcb7393b6dba99",
+        "libcef.dll": "a2a441490a9600f7e06b8c4dc609354ff7214add445a55c8fa699760d264e210"
+      },
+      "module": "cloudmusic.dll",
+      "nativeOpenRva": "0x108f950",
+      "nativeOpenFirst16Bytes": "488954241048894c2408555657b8901f",
+      "waveToAudioFormatRva": "0x10940a0",
+      "shareModeOffset": "0x158",
+      "nativeWaveFormatOffset": "0x130",
+      "nativeOutputAudioFormatOffset": "0xe8",
+      "observedInitializeCallReturnRva": "0x109062b",
+      "note": "This JSON documents the compiled profile. Changing it does not enable another client version."
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+/build/
+/outputs/
+/installer/generated/payload/
+/installer/generated/payload.zip
+/installer/generated/PayloadHashes.h
+*.map
+*.pdb
+*.obj
+__pycache__/
+.vs/

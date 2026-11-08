@@ -1,0 +1,279 @@
+{
+  "build": "2026.11.08.1",
+  "applications": {
+    "NetEase": {
+      "version": "3.1.36.205322 / 3.1.41.205564 x64",
+      "supportedVersions": [
+        "3.1.36.205322 x64",
+        "3.1.41.205564 x64"
+      ],
+      "fingerprints": {
+        "cloudmusic.exe": "9bc367409cd571de11ff814636ce665eac762452e7e0763a1debc39792344f0a",
+        "cloudmusic.dll": "d1b6d5da6143d414f6cdc54c5ca156617dfbb411a738768903bcb7393b6dba99",
+        "libcef.dll": "a2a441490a9600f7e06b8c4dc609354ff7214add445a55c8fa699760d264e210"
+      },
+      "profiles": [
+        {
+          "version": "3.1.36.205322",
+          "architecture": "x64",
+          "profile": "actual native music renderer, verified 2026-10-13",
+          "fingerprints": {
+            "cloudmusic.exe": "1b86292da1056a729226df9205eb9f69c1e5558bc3eddbe0639c06a2443bf2d3",
+            "cloudmusic.dll": "98874023cab8d13f4e7e3fbc74fbc30186529039593e1359a189878ece35029f",
+            "libcef.dll": "724b3e35edb5905540877fa8d7a8583a2503599639d7c79ccef6faa8e5a6bc49"
+          },
+          "module": "cloudmusic.dll",
+          "nativeOpenRva": "0x106bd70",
+          "nativeOpenFirst16Bytes": "488954241048894c2408555657b8901f",
+          "waveToAudioFormatRva": "0x10704c0",
+          "shareModeOffset": "0x158",
+          "nativeWaveFormatOffset": "0x130",
+          "nativeOutputAudioFormatOffset": "0xe8",
+          "observedInitializeCallReturnRva": "0x106ca4b",
+          "note": "This JSON documents the compiled profile. Changing it does not enable another client version."
+        },
+        {
+          "version": "3.1.41.205564",
+          "architecture": "x64",
+          "profile": "actual native music renderer, verified 2026-10-13",
+          "fingerprints": {
+            "cloudmusic.exe": "9bc367409cd571de11ff814636ce665eac762452e7e0763a1debc39792344f0a",
+            "cloudmusic.dll": "d1b6d5da6143d414f6cdc54c5ca156617dfbb411a738768903bcb7393b6dba99",
+            "libcef.dll": "a2a441490a9600f7e06b8c4dc609354ff7214add445a55c8fa699760d264e210"
+          },
+          "module": "cloudmusic.dll",
+          "nativeOpenRva": "0x108f950",
+          "nativeOpenFirst16Bytes": "488954241048894c2408555657b8901f",
+          "waveToAudioFormatRva": "0x10940a0",
+          "shareModeOffset": "0x158",
+          "nativeWaveFormatOffset": "0x130",
+          "nativeOutputAudioFormatOffset": "0xe8",
+          "observedInitializeCallReturnRva": "0x109062b",
+          "note": "This JSON documents the compiled profile. Changing it does not enable another client version."
+        }
+      ],
+      "files": [
+        {
+          "name": "nc-exclusive-hook.dll",
+          "sha256": "f40389d6d5399f7d8b0e4e9b24b447f222a6928766006ba9cab77792f7f88153"
+        },
+        {
+          "name": "nc-exclusive-launcher.exe",
+          "sha256": "e4767fbd3cb0f8769ab9a7f24949446a06145b106f9fad6cb08f9cef3c3e55c9"
+        },
+        {
+          "name": "nc-exclusive-probe.exe",
+          "sha256": "02a955730a6128bb8d88b6024463299454e9505fdd50e42c44373cf3152789c9"
+        },
+        {
+          "name": "nc-exclusive-asio-probe.exe",
+          "sha256": "0b8a6b4daa9956a479e8ebf827afd6ffaced5c1098b97cced3d4da59a7bcc528"
+        },
+        {
+          "name": "GPL-3.0.txt",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+        },
+        {
+          "name": "ASIO-SDK-LICENSE.txt",
+          "sha256": "61e56814f24b32216884b2db0b4dcc317111a5ab354d54d19dd9fc13d71b1c7a"
+        },
+        {
+          "name": "THIRD_PARTY_NOTICES.md",
+          "sha256": "f926800c00a8f88b4e43684255e95ccc29242eeeabe52f83958f816d54ed4238"
+        }
+      ]
+    },
+    "AppleMusic": {
+      "version": "1.1540.23042.0 / 1.1792.39682.0 x64 / 1.1792.39942.0 x64",
+      "supportedVersions": [
+        "软件包 1.1540.23042.0 x64（AppleMusic.exe / AMPLibraryAgent.exe 文件版本 1.6.4.90）",
+        "软件包 1.1792.39682.0 x64（AppleMusic.exe / AMPLibraryAgent.exe 文件版本 1.7.0.155）",
+        "软件包 1.1792.39942.0 x64（AppleMusic.exe / AMPLibraryAgent.exe 文件版本 1.7.0.156）"
+      ],
+      "fingerprints": {
+        "AppleMusic.exe": "50d9f6393a8578b7ddfb6f7e550bb8d2b2a10c32e55ac159d3463a3eca775227",
+        "AMPLibraryAgent.exe": "4ad22991186710051e872fdcdbab91980a55802be75f931044399a38d0cb5c30",
+        "CoreMedia.dll": "505ad3a5a804c1a00a2f58a8237292f000efacb0ee57850e5b6b3716adf155ce"
+      },
+      "files": [
+        {
+          "name": "am-exclusive-broker.exe",
+          "sha256": "622ce2373ca546742abaed98c59a1772ae67d229ecc90fbcaf4f1af56d670d22"
+        },
+        {
+          "name": "am-exclusive-hook.dll",
+          "sha256": "3450dd3e89897084c87f891c10752b4ef6bf6caf637df572a700e22748efdd3d"
+        },
+        {
+          "name": "am-exclusive-ui.dll",
+          "sha256": "188a2318fa2a783b6acbab35e06898da9e28b47f0e2e9b5d09bbc8cf501e12be"
+        },
+        {
+          "name": "am_exclusive_media_control.exe",
+          "sha256": "0725173bf2ba8ee1101d6afb64da08989d84e46f4b09ae3b8f46e75fe8281d24"
+        },
+        {
+          "name": "Register-Companion.ps1",
+          "sha256": "c2443492279c34246b644549c3dc77ce788cfd603e4c211859f4d27939ef7677"
+        },
+        {
+          "name": "Start-VerifiedAppleCompanion.ps1",
+          "sha256": "c87829028621b6b2ce0c42b40bbf5856c65b5a7c32a99d589642395ecc35b717"
+        },
+        {
+          "name": "LICENSE",
+          "sha256": "ad1955407c328a455813e76bdf9d33d1932d3ee10573c15d870944f9411887a5"
+        },
+        {
+          "name": "THIRD_PARTY_NOTICES.md",
+          "sha256": "39f78f56c70a368c8c62c045ed361aeeba3c485cd73a4d085b96b14f0bb3b19c"
+        }
+      ],
+      "profiles": [
+        {
+          "version": "1.1540.23042.0",
+          "fileVersion": "1.6.4.90",
+          "architecture": "x64",
+          "fingerprints": {
+            "AppleMusic.exe": "50d9f6393a8578b7ddfb6f7e550bb8d2b2a10c32e55ac159d3463a3eca775227",
+            "AMPLibraryAgent.exe": "4ad22991186710051e872fdcdbab91980a55802be75f931044399a38d0cb5c30",
+            "CoreMedia.dll": "505ad3a5a804c1a00a2f58a8237292f000efacb0ee57850e5b6b3716adf155ce"
+          }
+        },
+        {
+          "version": "1.1792.39682.0",
+          "fileVersion": "1.7.0.155",
+          "architecture": "x64",
+          "fingerprints": {
+            "AppleMusic.exe": "269b4676c2c91767f0305bb72ab4661ae5bbddb58b5ef6b489d4dcbc69151000",
+            "AMPLibraryAgent.exe": "1fb27b064ae71bbf71ec7e99209dd1b9640e9f042ce6201269e994181afae0c4",
+            "CoreMedia.dll": "40736bc27ae049408e3a54ec40d7279df002e69282dd729c09c725be34e0ed4a",
+            "CoreAudioToolbox.dll": "9d4061b8f482b7f2548079a96bc3b5b30b23f2aebb4d5df444331ba90fe886d8",
+            "CoreFoundation.dll": "a31ee0f1bd1ffd64442d0e001aa506bb8198e18ea87c9a484eff8f749bc4d1de",
+            "AVFoundationCF.dll": "808509507b6d72d594d9b43e3fd35988116a5aeb3c89423104673b265fb57daa"
+          }
+        },
+        {
+          "version": "1.1792.39942.0",
+          "fileVersion": "1.7.0.156",
+          "architecture": "x64",
+          "fingerprints": {
+            "AppleMusic.exe": "ff03fb24b4c15a38a787ae90a40ac1a0d83fde0e793e6e8957d7c7b5f77f9e51",
+            "AMPLibraryAgent.exe": "d79b2562251db7a72e2b44c202eb61a220b10aaeda085295cee3eb0eba54b6f5",
+            "CoreMedia.dll": "40736bc27ae049408e3a54ec40d7279df002e69282dd729c09c725be34e0ed4a",
+            "CoreAudioToolbox.dll": "9d4061b8f482b7f2548079a96bc3b5b30b23f2aebb4d5df444331ba90fe886d8",
+            "CoreFoundation.dll": "a31ee0f1bd1ffd64442d0e001aa506bb8198e18ea87c9a484eff8f749bc4d1de",
+            "AVFoundationCF.dll": "808509507b6d72d594d9b43e3fd35988116a5aeb3c89423104673b265fb57daa"
+          }
+        }
+      ]
+    }
+  },
+  "files": [
+    {
+      "path": "NetEase/nc-exclusive-hook.dll",
+      "bytes": 360448,
+      "sha256": "f40389d6d5399f7d8b0e4e9b24b447f222a6928766006ba9cab77792f7f88153"
+    },
+    {
+      "path": "NetEase/nc-exclusive-launcher.exe",
+      "bytes": 260608,
+      "sha256": "e4767fbd3cb0f8769ab9a7f24949446a06145b106f9fad6cb08f9cef3c3e55c9"
+    },
+    {
+      "path": "NetEase/nc-exclusive-probe.exe",
+      "bytes": 139776,
+      "sha256": "02a955730a6128bb8d88b6024463299454e9505fdd50e42c44373cf3152789c9"
+    },
+    {
+      "path": "NetEase/nc-exclusive-asio-probe.exe",
+      "bytes": 246784,
+      "sha256": "0b8a6b4daa9956a479e8ebf827afd6ffaced5c1098b97cced3d4da59a7bcc528"
+    },
+    {
+      "path": "NetEase/GPL-3.0.txt",
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "NetEase/ASIO-SDK-LICENSE.txt",
+      "bytes": 2640,
+      "sha256": "61e56814f24b32216884b2db0b4dcc317111a5ab354d54d19dd9fc13d71b1c7a"
+    },
+    {
+      "path": "NetEase/THIRD_PARTY_NOTICES.md",
+      "bytes": 1755,
+      "sha256": "f926800c00a8f88b4e43684255e95ccc29242eeeabe52f83958f816d54ed4238"
+    },
+    {
+      "path": "AppleMusic/am-exclusive-broker.exe",
+      "bytes": 395264,
+      "sha256": "622ce2373ca546742abaed98c59a1772ae67d229ecc90fbcaf4f1af56d670d22"
+    },
+    {
+      "path": "AppleMusic/am-exclusive-hook.dll",
+      "bytes": 667136,
+      "sha256": "3450dd3e89897084c87f891c10752b4ef6bf6caf637df572a700e22748efdd3d"
+    },
+    {
+      "path": "AppleMusic/am-exclusive-ui.dll",
+      "bytes": 482304,
+      "sha256": "188a2318fa2a783b6acbab35e06898da9e28b47f0e2e9b5d09bbc8cf501e12be"
+    },
+    {
+      "path": "AppleMusic/am_exclusive_media_control.exe",
+      "bytes": 271360,
+      "sha256": "0725173bf2ba8ee1101d6afb64da08989d84e46f4b09ae3b8f46e75fe8281d24"
+    },
+    {
+      "path": "AppleMusic/Register-Companion.ps1",
+      "bytes": 3341,
+      "sha256": "c2443492279c34246b644549c3dc77ce788cfd603e4c211859f4d27939ef7677"
+    },
+    {
+      "path": "AppleMusic/Start-VerifiedAppleCompanion.ps1",
+      "bytes": 4420,
+      "sha256": "c87829028621b6b2ce0c42b40bbf5856c65b5a7c32a99d589642395ecc35b717"
+    },
+    {
+      "path": "AppleMusic/LICENSE",
+      "bytes": 1102,
+      "sha256": "ad1955407c328a455813e76bdf9d33d1932d3ee10573c15d870944f9411887a5"
+    },
+    {
+      "path": "AppleMusic/THIRD_PARTY_NOTICES.md",
+      "bytes": 4216,
+      "sha256": "39f78f56c70a368c8c62c045ed361aeeba3c485cd73a4d085b96b14f0bb3b19c"
+    },
+    {
+      "path": "NetEase/licenses/AMExclusive.txt",
+      "bytes": 1102,
+      "sha256": "ad1955407c328a455813e76bdf9d33d1932d3ee10573c15d870944f9411887a5"
+    },
+    {
+      "path": "NetEase/licenses/ASIO-SDK-LICENSE.txt",
+      "bytes": 2640,
+      "sha256": "61e56814f24b32216884b2db0b4dcc317111a5ab354d54d19dd9fc13d71b1c7a"
+    },
+    {
+      "path": "NetEase/licenses/CEF.txt",
+      "bytes": 1662,
+      "sha256": "058c3827ffb827ff3edda471ae7e1bb1d1aa5931985f0126043ccd33409e792f"
+    },
+    {
+      "path": "NetEase/licenses/Chromium.txt",
+      "bytes": 1559,
+      "sha256": "845022e0c1db1abb41a6ba4cd3c4b674ec290f3359d9d3c78ae558d4c0ed9308"
+    },
+    {
+      "path": "NetEase/licenses/GPL-3.0.txt",
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "NetEase/licenses/MinHook.txt",
+      "bytes": 4446,
+      "sha256": "4f21f857550d7be854da6ea5f2da4e6775ca4e3fbb535e4f3d961c47d0bf3335"
+    }
+  ]
+}
