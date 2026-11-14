@@ -193,6 +193,7 @@ private:
     std::atomic<bool> endOfStreamSubmitted_{};
     std::atomic<bool> endOfStreamDrained_{};
     bool paused_{};
+    bool physicalStarted_{};
     bool pausedForRelease_{};
     ReplayPcmSource replaySource_;
     PcmPacketLedger packetLedger_;

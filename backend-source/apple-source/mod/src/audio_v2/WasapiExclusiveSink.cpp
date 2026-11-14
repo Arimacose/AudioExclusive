@@ -262,29 +262,24 @@ HRESULT WasapiExclusiveSink::Start(IIntegerPcmSource& source) noexcept {
         return finish(prime);
     }
 
-    renderThread_ = CreateThread(nullptr, 0, &WasapiExclusiveSink::RenderThreadThunk, this, 0, nullptr);
-    if (!renderThread_) {
-        const auto hr = HRESULT_FROM_WIN32(GetLastError());
-        RecordError(hr);
-        source_ = nullptr;
-        state_.store(WasapiSinkState::Faulted, std::memory_order_release);
-        return finish(hr);
-    }
-
     HRESULT hr = waitingForSource_.load(std::memory_order_acquire) ? S_OK : client_->Start();
     if (FAILED(hr)) {
         RecordError(hr);
-        stopRequested_.store(true, std::memory_order_release);
-        SetEvent(shutdownEvent_);
-        WaitForSingleObject(renderThread_, INFINITE);
-        CloseHandle(renderThread_);
-        renderThread_ = nullptr;
         source_ = nullptr;
         state_.store(WasapiSinkState::Faulted, std::memory_order_release);
         return finish(hr);
     }
+    physicalStarted_=!waitingForSource_.load(std::memory_order_acquire);
     paused_ = false;
     state_.store(WasapiSinkState::Running, std::memory_order_release);
+    renderThread_ = CreateThread(nullptr, 0, &WasapiExclusiveSink::RenderThreadThunk, this, 0, nullptr);
+    if (!renderThread_) {
+        const auto failure = HRESULT_FROM_WIN32(GetLastError());
+        if(physicalStarted_)client_->Stop();
+        physicalStarted_=false;RecordError(failure);source_ = nullptr;
+        state_.store(WasapiSinkState::Faulted, std::memory_order_release);
+        return finish(failure);
+    }
     return finish(S_OK);
 }
 
@@ -469,6 +464,14 @@ DWORD WasapiExclusiveSink::RenderThreadMain() noexcept {
                     threadFailure = fill;
                     break;
                 }
+                // A source that was empty at initial priming has never
+                // started the physical client. Only this first real packet
+                // needs Start; ordinary later underruns keep it running.
+                if(!physicalStarted_){
+                    const auto started=client_->Start();
+                    if(FAILED(started)){threadFailure=started;break;}
+                    physicalStarted_=true;
+                }
                 if (stopRequested_.load(std::memory_order_acquire)) break;
                 continue;
             }
@@ -524,6 +527,7 @@ void WasapiExclusiveSink::Stop() noexcept {
         }
     }
     source_ = nullptr;
+    physicalStarted_=false;
     resumeBlocked_.store(false, std::memory_order_release);
     paused_ = true;
     if (current != WasapiSinkState::Faulted) {
@@ -587,6 +591,7 @@ void WasapiExclusiveSink::ReleaseInterfaces() noexcept {
     Release(render_);
     Release(client_);
     paused_ = false;
+    physicalStarted_=false;
     committedClockFrames_.store(0, std::memory_order_release);
     lastPlayedFrames_ = 0;
     if (shutdownEvent_) {

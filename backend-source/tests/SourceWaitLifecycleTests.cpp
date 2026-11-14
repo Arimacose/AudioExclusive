@@ -63,6 +63,7 @@ struct Fixture {
         endpoint->buffer.resize(sink.bufferFrames_*8);
         sink.client_=endpoint;endpoint->AddRef();sink.clock_=endpoint;endpoint->AddRef();sink.render_=endpoint;
         sink.source_=&source;sink.state_.store(WasapiSinkState::Running);
+        sink.physicalStarted_=true;
         sink.submittedFrames_.store(rate);
         sink.committedClockFrames_.store(rate);
         sink.packetLedger_.Initialize(sink.bufferFrames_,2,32);
@@ -81,6 +82,13 @@ struct Fixture {
 };
 int main(){try{
     for(UINT32 rate:{44100u,48000u,96000u,192000u}){
+        {Fixture f(rate);f.sink.state_.store(WasapiSinkState::Open);f.sink.physicalStarted_=false;
+         f.sink.submittedFrames_.store(0);f.sink.committedClockFrames_.store(0);f.endpoint->position.store(0);
+         Check(SUCCEEDED(f.sink.Start(f.source)),"initial source wait failed to arm the sink");
+         Check(f.endpoint->starts.load()==0,"empty initial source started physical output");
+         f.source.ready.store(true);SetEvent(f.sink.config_.sourceReadyEvent);
+         Check(WaitForSingleObject(f.endpoint->started,200)==WAIT_OBJECT_0,"first real packet did not start the endpoint");
+         Check(f.endpoint->starts.load()==1&&f.endpoint->releases.load()==1,"first packet was started or submitted more than once");}
         {Fixture f(rate);f.Run();
          Check(WaitForSingleObject(f.endpoint->stopped,60)==WAIT_TIMEOUT,"pending DAC audio was interrupted");
          f.source.ready.store(true);SetEvent(f.sink.config_.sourceReadyEvent);

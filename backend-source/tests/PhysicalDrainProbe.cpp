@@ -26,9 +26,10 @@ struct ClockTrace final : IAudioClock {
     }
 };
 struct FiniteSource final : IIntegerPcmSource {
-    UINT32 remaining;UINT32 period;unsigned delay;mutable ULONGLONG ready{};
-    FiniteSource(UINT32 rate,unsigned stall):remaining(rate/2+rate/150),period(rate/50),delay(stall){}
+    UINT32 remaining;UINT32 period;unsigned delay;mutable ULONGLONG ready{};ULONGLONG initialReady{};
+    FiniteSource(UINT32 rate,unsigned stall,unsigned initialWait=0):remaining(rate/2+rate/150),period(rate/50),delay(stall),initialReady(GetTickCount64()+initialWait){}
     bool CanProvide(UINT32) const noexcept override{
+        if(GetTickCount64()<initialReady)return false;
         if(delay&&remaining<period){if(!ready)ready=GetTickCount64()+delay;return GetTickCount64()>=ready;}return true;
     }
     bool Exhausted() const noexcept override{return remaining==0;}
@@ -47,8 +48,8 @@ int wmain(int argc,wchar_t** argv){
     }
     if(std::wstring(argv[1])!=L"--hardware-test")return 2;
     bool passed=true;
-    for(UINT32 rate:{48000u,44100u})for(unsigned wait:{0u,50u,250u}){
-        FiniteSource source(rate,wait);WasapiExclusiveSink sink;WasapiSinkConfig cfg{};
+    for(UINT32 rate:{48000u,44100u})for(unsigned wait:{0u,50u,250u})for(unsigned initial:{0u,100u}){
+        FiniteSource source(rate,wait,initial);WasapiExclusiveSink sink;WasapiSinkConfig cfg{};
         cfg.format={rate,2,24,24,PcmEncoding::SignedInteger,true,24};
         cfg.periodFrames=rate/50;
         cfg.endpointId=endpoint;
@@ -61,7 +62,7 @@ int wmain(int argc,wchar_t** argv){
         const auto positionHr=sink.clock_->GetPosition(&pos,nullptr);
         const auto paddingHr=sink.client_->GetCurrentPadding(&padding);
         sink.clock_->GetFrequency(&frequency);
-        std::cout<<"rate="<<rate<<" wait="<<wait<<" drained="<<sink.EndOfStreamDrained()
+        std::cout<<"rate="<<rate<<" wait="<<wait<<" initialWait="<<initial<<" drained="<<sink.EndOfStreamDrained()
                  <<" submitted="<<sink.Stats().submittedFrames<<" position="<<pos<<" frequency="<<frequency
                  <<" padding="<<padding<<" positionResult="<<positionHr<<" paddingResult="<<paddingHr
                  <<" deviceDeadline="<<sink.Stats().committedClockFrames
