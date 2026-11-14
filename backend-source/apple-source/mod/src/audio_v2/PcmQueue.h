@@ -115,6 +115,9 @@ public:
     }
     std::size_t Size() const noexcept { return queue_.size(); }
     std::size_t Capacity() const noexcept { return queue_.capacity(); }
+    std::size_t PublishedFrames() const noexcept {
+        return publishedFrames_.load(std::memory_order_acquire);
+    }
     std::size_t QueuedFrames() const noexcept {
         // Load the consumer first. The consumer sees its own latest count;
         // acquiring the publication count also acquires the queue writes.

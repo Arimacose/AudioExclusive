@@ -58,9 +58,12 @@ public:
     }
 
     std::size_t AvailableFrames() const noexcept override {
-        if (ended_) return 0;
-        const auto queued = queue_.QueuedFrames();
-        return queued > blockOffsetFrames_ ? queued - blockOffsetFrames_ : 0;
+        // The control thread must not read the consumer's block cursor or
+        // ended flag. Count source frames already mapped, independently of
+        // whether the consumer has popped the containing block yet.
+        const auto mapped = stats_.mappedFrames.load(std::memory_order_acquire);
+        const auto published = queue_.PublishedFrames();
+        return published > mapped ? published - mapped : 0;
     }
 
     HRESULT Fill(std::int32_t* destination, std::uint32_t capacityFrames,
@@ -171,7 +174,18 @@ public:
         return S_OK;
     }
 
-    const QueuedPcmSourceStats& Stats() const noexcept { return stats_; }
+    QueuedPcmSourceStats Stats() const noexcept {
+        return {
+            stats_.mappedFrames.load(std::memory_order_acquire),
+            stats_.queueUnderruns.load(std::memory_order_acquire),
+            stats_.mappingFailures.load(std::memory_order_acquire),
+            stats_.continuityFailures.load(std::memory_order_acquire),
+            stats_.verificationFailures.load(std::memory_order_acquire),
+            stats_.integerizedSamples.load(std::memory_order_acquire),
+            stats_.clippedSamples.load(std::memory_order_acquire),
+            stats_.nonFiniteSamples.load(std::memory_order_acquire),
+        };
+    }
     bool Ended() const noexcept { return ended_; }
 
 private:
@@ -203,7 +217,11 @@ private:
     std::uint32_t blockOffsetFrames_{};
     bool firstBlock_{true};
     bool ended_{};
-    QueuedPcmSourceStats stats_{};
+    struct AtomicStats {
+        std::atomic<std::uint64_t> mappedFrames{}, queueUnderruns{}, mappingFailures{},
+            continuityFailures{}, verificationFailures{}, integerizedSamples{},
+            clippedSamples{}, nonFiniteSamples{};
+    } stats_{};
 };
 
 } // namespace ammod::audio_v2

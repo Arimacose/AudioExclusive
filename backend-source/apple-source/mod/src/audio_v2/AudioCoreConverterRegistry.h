@@ -6,6 +6,8 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
+#include <thread>
 
 namespace ammod::audio_v2 {
 
@@ -27,6 +29,7 @@ struct ConverterRegistration final {
 };
 
 struct ConverterRegistrationSnapshot final {
+    std::uint64_t publication{};
     std::size_t slot{};
     ConverterRegistration registration{};
     std::uint64_t nextFrame{};
@@ -47,6 +50,7 @@ public:
     AudioCoreConverterRegistry& operator=(const AudioCoreConverterRegistry&) = delete;
 
     bool Register(const ConverterRegistration& registration) noexcept {
+        std::lock_guard writeLock(descriptorMutex_);
         if (!registration.converter || registration.mediaGeneration == 0 ||
             !IsValidFormat(registration.outputFormat) ||
             (registration.sourceBitDepth != 0 &&
@@ -68,6 +72,7 @@ public:
             }
         }
         if (!slot) return false;
+        Publication change(*slot);
 
         // A replacement first disappears from callback lookup, then its
         // immutable descriptor is written, and finally the real key is
@@ -103,6 +108,7 @@ public:
 
     bool UpdateSourcePrecision(void* converter, std::uint32_t sourceBitDepth,
                                std::uint32_t sampleRate, std::uint32_t channels) noexcept {
+        std::lock_guard writeLock(descriptorMutex_);
         if (!converter || !IsSupportedSourceDepth(static_cast<std::uint16_t>(sourceBitDepth))) {
             return false;
         }
@@ -112,6 +118,7 @@ public:
             slot->channels.load(std::memory_order_acquire) != channels) {
             return false;
         }
+        Publication change(*slot);
         slot->sourceBitDepth.store(sourceBitDepth, std::memory_order_release);
         slot->sourceValidBits.store(static_cast<std::uint16_t>(sourceBitDepth),
                                     std::memory_order_release);
@@ -131,6 +138,7 @@ public:
                                    std::uint32_t channels,
                                    std::uint64_t observationId,
                                    void*& matchedConverter) noexcept {
+        std::lock_guard writeLock(descriptorMutex_);
         matchedConverter = nullptr;
         if (!IsSupportedSourceDepth(static_cast<std::uint16_t>(sourceBitDepth)) ||
             sampleRate == 0 || channels == 0) return false;
@@ -151,6 +159,7 @@ public:
             bestObservation = observed;
         }
         if (!best) return false;
+        Publication change(*best);
         best->sourceBitDepth.store(sourceBitDepth, std::memory_order_release);
         best->sourceValidBits.store(sourceBitDepth, std::memory_order_release);
         if (sourceBitDepth == 32) best->validBits.store(32, std::memory_order_release);
@@ -161,6 +170,7 @@ public:
     }
 
     bool Bind(void* converter, std::uint64_t mediaGeneration) noexcept {
+        std::lock_guard writeLock(descriptorMutex_);
         auto* slot = FindSlot(converter);
         if (!slot || mediaGeneration == 0 ||
             slot->mediaGeneration.load(std::memory_order_acquire) != mediaGeneration ||
@@ -168,6 +178,7 @@ public:
                 slot->sourceBitDepth.load(std::memory_order_acquire)))) {
             return false;
         }
+        Publication change(*slot);
         slot->nextFrame.store(0, std::memory_order_release);
         slot->discontinuity.store(true, std::memory_order_release);
         slot->bound.store(true, std::memory_order_release);
@@ -183,6 +194,7 @@ public:
                        std::uint32_t sourceBitDepth,
                        std::uint64_t observationId,
                        void*& converter) const noexcept {
+        std::lock_guard readLock(descriptorMutex_);
         converter = nullptr;
         std::uint64_t bestObservation = 0;
         const auto matches = [&](const Slot& slot, bool exactObservation) {
@@ -236,6 +248,7 @@ public:
                                    std::uint64_t observationId,
                                    void*& converter,
                                    std::uint32_t& sourceBitDepth) const noexcept {
+        std::lock_guard readLock(descriptorMutex_);
         converter = nullptr;
         sourceBitDepth = 0;
         const Slot* best{};
@@ -270,15 +283,19 @@ public:
     }
 
     bool UpdateMediaGeneration(void* converter, std::uint64_t mediaGeneration) noexcept {
+        std::lock_guard writeLock(descriptorMutex_);
         if (!converter || mediaGeneration == 0) return false;
         auto* slot = FindSlot(converter);
         if (!slot || slot->key.load(std::memory_order_acquire) == kReservedKey) return false;
+        Publication change(*slot);
         slot->mediaGeneration.store(mediaGeneration, std::memory_order_release);
         return true;
     }
 
     void Unbind(void* converter) noexcept {
+        std::lock_guard writeLock(descriptorMutex_);
         if (auto* slot = FindSlot(converter)) {
+            Publication change(*slot);
             slot->bound.store(false, std::memory_order_release);
             slot->discontinuity.store(true, std::memory_order_release);
         }
@@ -286,20 +303,26 @@ public:
 
     void Reset(void* converter) noexcept {
         if (auto* slot = FindSlot(converter)) {
+            CallbackPin pin(*slot);
+            if (!pin.Matches(converter)) return;
             slot->nextFrame.store(0, std::memory_order_release);
             slot->discontinuity.store(true, std::memory_order_release);
         }
     }
 
     void Retire(void* converter) noexcept {
+        std::lock_guard writeLock(descriptorMutex_);
         if (auto* slot = FindSlot(converter)) {
+            Publication change(*slot);
             slot->bound.store(false, std::memory_order_release);
             slot->key.store(0, std::memory_order_release);
         }
     }
 
     void RetireAll() noexcept {
+        std::lock_guard writeLock(descriptorMutex_);
         for (auto& slot : slots_) {
+            Publication change(slot);
             slot.bound.store(false, std::memory_order_release);
             slot.key.store(0, std::memory_order_release);
         }
@@ -310,7 +333,12 @@ public:
         const auto key = reinterpret_cast<std::uintptr_t>(converter);
         for (std::size_t index = 0; index < slots_.size(); ++index) {
             const auto& slot = slots_[index];
+            const auto publication = slot.publication.load(std::memory_order_acquire);
+            if (publication & 1u) continue;
             if (slot.key.load(std::memory_order_acquire) != key) continue;
+            CallbackPin pin(slot);
+            if (!pin.Matches(converter, publication)) continue;
+            snapshot.publication = publication;
             snapshot.slot = index;
             snapshot.registration.converter = converter;
             snapshot.registration.outputFormat = {
@@ -347,16 +375,21 @@ public:
             snapshot.bound = slot.bound.load(std::memory_order_acquire);
             // Validate publication once more. A concurrent retire/reuse makes
             // this callback a no-op instead of using a mixed descriptor.
-            return slot.key.load(std::memory_order_acquire) == key;
+            return slot.key.load(std::memory_order_acquire) == key &&
+                slot.publication.load(std::memory_order_acquire) == publication;
         }
         return false;
     }
 
     bool ClaimFrames(void* converter, std::uint32_t frames,
-                     std::uint64_t& firstFrame, bool& discontinuity) noexcept {
+                     std::uint64_t& firstFrame, bool& discontinuity,
+                     std::uint64_t expectedPublication = 0) noexcept {
         if (!converter || frames == 0) return false;
         const auto key = reinterpret_cast<std::uintptr_t>(converter);
         for (auto& slot : slots_) {
+            if (slot.key.load(std::memory_order_acquire) != key) continue;
+            CallbackPin pin(slot);
+            if (!pin.Matches(converter, expectedPublication)) continue;
             if (slot.key.load(std::memory_order_acquire) != key ||
                 !slot.bound.load(std::memory_order_acquire)) continue;
             firstFrame = slot.nextFrame.fetch_add(frames, std::memory_order_acq_rel);
@@ -371,6 +404,8 @@ private:
     struct Slot final {
         static constexpr std::uintptr_t kEmpty = 0;
         std::atomic<std::uintptr_t> key{kEmpty};
+        std::atomic<std::uint64_t> publication{};
+        mutable std::atomic<unsigned> callbacks{};
         std::atomic<std::uint32_t> rate{};
         std::atomic<std::uint32_t> channels{};
         std::atomic<std::uint32_t> validBits{};
@@ -393,6 +428,29 @@ private:
         std::atomic<bool> bound{};
     };
 
+    // Descriptor writers run on control/creation threads. The PCM callback
+    // only pins a stable publication with atomics; it never takes the mutex.
+    struct Publication {
+        Slot& slot;
+        explicit Publication(Slot& value) noexcept : slot(value) {
+            slot.publication.fetch_add(1, std::memory_order_seq_cst);
+            while (slot.callbacks.load(std::memory_order_seq_cst)) std::this_thread::yield();
+        }
+        ~Publication(){slot.publication.fetch_add(1, std::memory_order_release);}
+    };
+    struct CallbackPin {
+        const Slot& slot;
+        explicit CallbackPin(const Slot& value) noexcept : slot(value) {
+            slot.callbacks.fetch_add(1, std::memory_order_seq_cst);
+        }
+        ~CallbackPin(){slot.callbacks.fetch_sub(1, std::memory_order_release);}
+        bool Matches(void* converter,std::uint64_t expected=0) const noexcept {
+            const auto version=slot.publication.load(std::memory_order_seq_cst);
+            return !(version&1u) && (!expected || version==expected) &&
+                slot.key.load(std::memory_order_acquire)==reinterpret_cast<std::uintptr_t>(converter);
+        }
+    };
+
     static constexpr std::uintptr_t kReservedKey = 1;
 
     Slot* FindSlot(void* converter) noexcept {
@@ -412,6 +470,7 @@ private:
     }
 
     std::array<Slot, kConverterRegistryCapacity> slots_{};
+    mutable std::mutex descriptorMutex_;
 };
 
 } // namespace ammod::audio_v2

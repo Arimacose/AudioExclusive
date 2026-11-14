@@ -1012,7 +1012,8 @@ bool AudioCoreRuntime::OnPcmOutput(void* converter, const ApplePcmFormatView& fo
             if (ParseApplePcmOutput(format, list, producedPackets, output)) {
                 std::uint64_t firstFrame{};
                 bool discontinuity{};
-                if (registry_.ClaimFrames(converter, output.frames, firstFrame, discontinuity)) {
+                if (registry_.ClaimFrames(converter, output.frames, firstFrame, discontinuity,
+                                           snapshot.publication)) {
                     if (output.layout == ApplePcmLayout::InterleavedFloat32) {
                         accepted = tap_.OnInterleaved(converter, firstFrame,
                                                       output.interleaved, output.frames,
@@ -1328,7 +1329,8 @@ void AudioCoreRuntime::ExtendSeekQuietPeriodLocked() noexcept {
 void AudioCoreRuntime::TryResumePausedSinkLocked() noexcept {
     if (userPauseIntent_ || seekFence_ || !graphStarted_ || !nativeStarted_ ||
         coordinator_.Phase() != AudioCoreGatePhase::Active ||
-        coordinator_.SinkState() != WasapiSinkState::Open) {
+        (coordinator_.SinkState() != WasapiSinkState::Open &&
+         !coordinator_.Sink().PausedForRelease())) {
         return;
     }
     const HRESULT resume = coordinator_.ResumeEndpoint();

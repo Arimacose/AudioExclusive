@@ -182,12 +182,14 @@ HRESULT AudioCoreCoordinator::Start() noexcept {
 void AudioCoreCoordinator::PauseEndpoint() noexcept {
     if (gate_.Phase() == AudioCoreGatePhase::Active &&
         sink_.State() == WasapiSinkState::Running) {
-        sink_.Stop();
+        const auto paused=sink_.PauseForRelease();
+        if(FAILED(paused))gate_.Fail(token_);
     }
 }
 
 HRESULT AudioCoreCoordinator::ResumeEndpoint() noexcept {
     if (!source_ || gate_.Phase() != AudioCoreGatePhase::Active) return E_UNEXPECTED;
+    if(sink_.PausedForRelease())return sink_.ResumeAfterRelease(*source_);
     if (sink_.State() == WasapiSinkState::Running) return S_OK;
     if (sink_.State() != WasapiSinkState::Open) return E_UNEXPECTED;
     return sink_.Start(*source_);
@@ -195,12 +197,15 @@ HRESULT AudioCoreCoordinator::ResumeEndpoint() noexcept {
 
 bool AudioCoreCoordinator::ShouldSuppressNative() const noexcept {
     // The exclusive client remains the sole endpoint owner during a recoverable
-    // P0/network wait.  It is stopped without acquiring a buffer and resumed
-    // only after a complete source buffer is available.  Reopening Apple's
+    // P0/network wait. It does not acquire an empty buffer and only submits
+    // another packet when real source frames are available. Reopening Apple's
     // native path here would create a second owner while the exclusive client
     // is still initialized, and would advance Apple's timeline past the P0
     // frames waiting in this generation.
-    return outputGate_.ShouldSuppress(token_);
+    // Native callbacks may race control-thread token replacement. The output
+    // latch already publishes its active generation atomically; do not read
+    // the control-only token_ from this renderer-facing path.
+    return outputGate_.ShouldSuppress({outputGate_.SuppressedGeneration()});
 }
 
 const AudioCoreCoordinatorStats AudioCoreCoordinator::Stats() const noexcept {

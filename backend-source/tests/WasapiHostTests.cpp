@@ -10,7 +10,7 @@ struct Fixture {
     std::mutex mutex;WORD bits{32};unsigned rate{44100};bool align{};
     unsigned activations{},initializations{},held{},packets{};
     HANDLE deviceEvent{},capturedEvent{CreateEventW(nullptr,FALSE,FALSE,nullptr)};
-    std::vector<BYTE> firstPacket;
+    std::vector<BYTE> firstPacket,lastPacket;
     ~Fixture(){CloseHandle(capturedEvent);}
 } fixture;
 class FakeDevice final:public IAudioClient,public IAudioRenderClient,public IAudioClock {
@@ -58,7 +58,7 @@ public:
     HRESULT STDMETHODCALLTYPE GetBuffer(UINT32 frames,BYTE** output) override{if(frames!=frames_)return AUDCLNT_E_BUFFER_SIZE_ERROR;*output=buffer_.data();return S_OK;}
     HRESULT STDMETHODCALLTYPE ReleaseBuffer(UINT32 frames,DWORD flags) override {
         if(frames!=frames_)return AUDCLNT_E_INVALID_SIZE;
-        {std::lock_guard guard(fixture.mutex);if(!fixture.packets&&!(flags&AUDCLNT_BUFFERFLAGS_SILENT))fixture.firstPacket=buffer_;++fixture.packets;}
+        {std::lock_guard guard(fixture.mutex);fixture.lastPacket=buffer_;if(!fixture.packets&&!(flags&AUDCLNT_BUFFERFLAGS_SILENT))fixture.firstPacket=buffer_;++fixture.packets;}
         SetEvent(fixture.capturedEvent);return S_OK;
     }
 };
@@ -100,6 +100,7 @@ void RunCase(unsigned rate,WORD bits,bool align){
     {std::lock_guard guard(fixture.mutex);Check(!fixture.held,"pause retained exclusive ownership");}
     UINT32 padding{};audio->GetCurrentPadding(&padding);Check(padding==capacity,"paused producer was allowed to keep filling");
     Check(SUCCEEDED(audio->Start()),"resume did not reacquire endpoint");
+    {std::lock_guard guard(fixture.mutex);Check(fixture.lastPacket==expected,"pause/resume discarded still-unplayed PCM beyond the previous four-packet history");}
     {std::lock_guard guard(fixture.mutex);Check(fixture.held==1,"resume did not reopen physical device");}
     const auto before=Packets();Pulse();WaitPackets(before+1);Check(SUCCEEDED(audio->Stop()),"second pause failed");
     Check(SUCCEEDED(audio->Reset()),"paused reset failed");audio->GetCurrentPadding(&padding);Check(!padding,"reset retained old queued PCM");

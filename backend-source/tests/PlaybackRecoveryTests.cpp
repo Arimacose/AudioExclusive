@@ -20,6 +20,44 @@ void Check(bool passed, const char* message) {
     if (!passed) throw std::runtime_error(message);
     std::cout << "PASS " << message << '\n';
 }
+static void CheckRateTransition(std::uint32_t before,std::uint32_t after) {
+    auto runtime=std::make_unique<AudioCoreRuntime>();
+    Check(runtime->Start({}),"transition worker starts");
+    runtime->SetUiEnabled(true);
+    const auto oldConverter=reinterpret_cast<void*>(0x1100);
+    const auto newConverter=reinterpret_cast<void*>(0x1200);
+    const auto unit=reinterpret_cast<void*>(0x2100);
+    const auto client=reinterpret_cast<void*>(0x3100);
+    const auto registerAt=[&](void* converter,std::uint32_t rate,std::uint64_t observation){
+        const ApplePcmFormatView source{0x616c6163u,0,0,4096,0,2,24,rate};
+        const ApplePcmFormatView output{kAppleLinearPcm,kAppleFormatFlagIsFloat,8,1,8,2,32,rate};
+        runtime->OnConverterCreated(converter,source,output,observation);
+    };
+    registerAt(oldConverter,before,101);
+    runtime->OnAudioUnitInitialized(unit,oldConverter,before,2,24,101);
+    runtime->OnAudioUnitStarted(unit);
+    runtime->OnNativeClientInitialized(client,L"test",AUDCLNT_SHAREMODE_SHARED,0,nullptr,S_OK);
+    runtime->coordinator_.gate_.phase_.store(AudioCoreGatePhase::Active);
+    Check(runtime->OnStreamingProducerEndOfStream(oldConverter),"natural EOF seals the current converter candidate");
+    runtime->OnNativeClientStopped(client,S_OK);
+    Check(runtime->endOfStreamDrainPending_,"natural native Stop waits for the old device tail");
+    runtime->OnAudioUnitStopped(unit);
+    runtime->OnAudioUnitUninitialized(unit);
+    runtime->OnConverterDisposed(oldConverter);
+    registerAt(newConverter,after,102);
+    runtime->OnAudioUnitInitialized(unit,newConverter,after,2,24,102);
+    runtime->OnAudioUnitStarted(unit);
+    Check(runtime->BoundConverter()==oldConverter,"successor does not discard the old unplayed terminal packet");
+    runtime->coordinator_.sink_.endOfStreamDrained_.store(true);
+    runtime->OnNativeClientInitialized(reinterpret_cast<void*>(0x3200),L"test",AUDCLNT_SHAREMODE_SHARED,0,nullptr,S_OK);
+    const auto deadline=GetTickCount64()+250;
+    while(runtime->BoundConverter()!=newConverter&&GetTickCount64()<deadline)Sleep(1);
+    Check(runtime->BoundConverter()==newConverter&&runtime->Coordinator().Format().sampleRate==after,
+          "device completion binds the different-rate successor without a seek");
+    Check(!runtime->seekFence_&&runtime->graphStarted_&&runtime->Coordinator().Phase()==AudioCoreGatePhase::Capturing,
+          "natural rate transition preserves successor start and accepts its PCM");
+    runtime->Stop();
+}
 int main() {
     try {
         auto runtime = std::make_unique<AudioCoreRuntime>();
@@ -61,6 +99,8 @@ int main() {
         Check(runtime->coordinator_.PushP0Interleaved(0, pcm.data(), kMaxBlockFrames, false, false),
             "fresh generation accepts PCM after overflow recovery");
         runtime->SetUiEnabled(false);
+        CheckRateTransition(44100,48000);
+        CheckRateTransition(48000,44100);
         std::cout << "All playback recovery regression checks passed\n";
         return 0;
     } catch (const std::exception& error) {

@@ -118,11 +118,12 @@ class Client final: public IAudioClient, public IAudioRenderClient, public IAudi
     HRESULT EnsureDriver() {
         std::lock_guard lock(lifecycle);if(driver)return S_OK;if(current.load()&&current.load()!=this)return AUDCLNT_E_DEVICE_IN_USE;
         current.store(this);reserved=true;
-        CLSID clsid{};if(FAILED(CLSIDFromString(id.c_str(),&clsid)))return E_INVALIDARG;
+        const auto unreserve=[this](){if(current.load()==this)current.store(nullptr);reserved=false;};
+        CLSID clsid{};if(FAILED(CLSIDFromString(id.c_str(),&clsid))){unreserve();return E_INVALIDARG;}
         HRESULT hr=CoCreateInstance(clsid,nullptr,CLSCTX_INPROC_SERVER,clsid,reinterpret_cast<void**>(&driver));
-        if(FAILED(hr))return hr;
-        if(!driver)return E_POINTER;
-        if(!driver->init(GetDesktopWindow())){driver->Release();driver=nullptr;return E_FAIL;}
+        if(FAILED(hr)){unreserve();return hr;}
+        if(!driver){unreserve();return E_POINTER;}
+        if(!driver->init(GetDesktopWindow())){driver->Release();driver=nullptr;unreserve();return E_FAIL;}
         return S_OK;
     }
     HRESULT CheckDriverFormat(const WAVEFORMATEX* format) {
@@ -193,14 +194,14 @@ public:
     HRESULT STDMETHODCALLTYPE GetDevicePeriod(REFERENCE_TIME* normal,REFERENCE_TIME* minimum) override{auto p=initialized?10000000LL*period/wave.Format.nSamplesPerSec:200000;if(normal)*normal=p;if(minimum)*minimum=p;return S_OK;}
     HRESULT STDMETHODCALLTYPE Start() override{if(!initialized)return AUDCLNT_E_NOT_INITIALIZED;if(!event.load())return AUDCLNT_E_EVENTHANDLE_NOT_SET;if(fault.load())return AUDCLNT_E_DEVICE_INVALIDATED;if(started)return AUDCLNT_E_NOT_STOPPED;clockOffset=clockFrames.load();clockProgress={};auto hr=Good(driver->start())?S_OK:E_FAIL;started=SUCCEEDED(hr);Backend::Instance().Started(static_cast<IAudioClient*>(this),hr);return hr;}
     HRESULT STDMETHODCALLTYPE Stop() override{if(started){auto e=driver->stop();if(!Good(e))return E_FAIL;started=false;}Backend::Instance().Stopped(static_cast<IAudioClient*>(this));return S_OK;}
-    HRESULT STDMETHODCALLTYPE Reset() override{if(started)return AUDCLNT_E_NOT_STOPPED;read.store(0);write.store(0);clockSequence.fetch_add(1);clockFrames.store(0);clockQpc.store(0);clockSequence.fetch_add(1);driverNanoseconds.store(0);clockSource.store(0);clockOffset=0;clockProgress={};acquired=0;return S_OK;}
-    HRESULT STDMETHODCALLTYPE SetEventHandle(HANDLE h) override{if(!h)return E_INVALIDARG;event.store(h);return S_OK;}
-    HRESULT STDMETHODCALLTYPE GetService(REFIID iid,void** out) override{if(iid!=__uuidof(IAudioRenderClient)&&iid!=__uuidof(IAudioClock)){if(out)*out=nullptr;return E_NOINTERFACE;}return QueryInterface(iid,out);}
+    HRESULT STDMETHODCALLTYPE Reset() override{if(!initialized)return AUDCLNT_E_NOT_INITIALIZED;if(started)return AUDCLNT_E_NOT_STOPPED;read.store(0);write.store(0);clockSequence.fetch_add(1);clockFrames.store(0);clockQpc.store(0);clockSequence.fetch_add(1);driverNanoseconds.store(0);clockSource.store(0);clockOffset=0;clockProgress={};acquired=0;return S_OK;}
+    HRESULT STDMETHODCALLTYPE SetEventHandle(HANDLE h) override{if(!initialized)return AUDCLNT_E_NOT_INITIALIZED;if(!h)return E_INVALIDARG;event.store(h);return S_OK;}
+    HRESULT STDMETHODCALLTYPE GetService(REFIID iid,void** out) override{if(!initialized){if(out)*out=nullptr;return AUDCLNT_E_NOT_INITIALIZED;}if(iid!=__uuidof(IAudioRenderClient)&&iid!=__uuidof(IAudioClock)){if(out)*out=nullptr;return E_NOINTERFACE;}return QueryInterface(iid,out);}
     HRESULT STDMETHODCALLTYPE GetFrequency(UINT64* value) override{if(!value)return E_POINTER;if(!initialized)return AUDCLNT_E_NOT_INITIALIZED;*value=wave.Format.nSamplesPerSec;return S_OK;}
     HRESULT STDMETHODCALLTYPE GetPosition(UINT64* value,UINT64* qpc) override{if(!value)return E_POINTER;if(!initialized)return AUDCLNT_E_NOT_INITIALIZED;if(fault.load())return ReportFault();for(;;){const auto sequence=clockSequence.load();if(sequence&1)continue;const auto frames=clockFrames.load(),stamp=clockQpc.load();if(sequence!=clockSequence.load())continue;*value=frames;if(qpc)*qpc=stamp;break;}return S_OK;}
     HRESULT STDMETHODCALLTYPE GetCharacteristics(DWORD* value) override{if(!value)return E_POINTER;*value=AUDIOCLOCK_CHARACTERISTIC_FIXED_FREQ;return S_OK;}
-    HRESULT STDMETHODCALLTYPE GetBuffer(UINT32 frames,BYTE** out) override{if(!out)return E_POINTER;*out=nullptr;if(!initialized)return AUDCLNT_E_NOT_INITIALIZED;if(fault.load())return AUDCLNT_E_DEVICE_INVALIDATED;if(acquired)return AUDCLNT_E_OUT_OF_ORDER;UINT32 padding{};GetCurrentPadding(&padding);if(frames>capacity-padding)return AUDCLNT_E_BUFFER_TOO_LARGE;acquired=frames;*out=reinterpret_cast<BYTE*>(packet.data());return S_OK;}
-    HRESULT STDMETHODCALLTYPE ReleaseBuffer(UINT32 frames,DWORD flags) override{if(frames>acquired)return AUDCLNT_E_INVALID_SIZE;if(!frames){acquired=0;return S_OK;}auto w=write.load(std::memory_order_relaxed);bool signal=false;
+    HRESULT STDMETHODCALLTYPE GetBuffer(UINT32 frames,BYTE** out) override{if(!out)return E_POINTER;*out=nullptr;if(!initialized)return AUDCLNT_E_NOT_INITIALIZED;if(fault.load())return AUDCLNT_E_DEVICE_INVALIDATED;if(acquired)return AUDCLNT_E_OUT_OF_ORDER;UINT32 padding{};GetCurrentPadding(&padding);if(frames>capacity-padding)return AUDCLNT_E_BUFFER_TOO_LARGE;if(!frames)return S_OK;acquired=frames;*out=reinterpret_cast<BYTE*>(packet.data());return S_OK;}
+    HRESULT STDMETHODCALLTYPE ReleaseBuffer(UINT32 frames,DWORD flags) override{if(!initialized)return AUDCLNT_E_NOT_INITIALIZED;if(flags&~AUDCLNT_BUFFERFLAGS_SILENT)return E_INVALIDARG;if(frames>acquired)return AUDCLNT_E_INVALID_SIZE;if(!frames){acquired=0;return S_OK;}auto w=write.load(std::memory_order_relaxed);bool signal=false;
         for(UINT32 f=0;f<frames;++f)for(unsigned c=0;c<2;++c){auto sample=(flags&AUDCLNT_BUFFERFLAGS_SILENT)?0:packet[f*2+c];ring[((w+f)%capacity)*2+c]=sample;signal|=sample!=0;}
         write.store(w+frames,std::memory_order_release);acquired=0;Backend::Instance().Submitted(static_cast<IAudioRenderClient*>(this),frames,S_OK);if(signal)Backend::Instance().Content(static_cast<IAudioRenderClient*>(this));return S_OK;}
     std::wstring CapabilitiesJson(){

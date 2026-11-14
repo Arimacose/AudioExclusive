@@ -45,47 +45,53 @@ std::wstring WasapiDeviceJson(const std::wstring& endpoint) {
 Backend& Backend::Instance(){static Backend value;return value;}
 void Backend::LoadConfig(){enabled_.store(GetPrivateProfileIntW(L"exclusive",L"enabled",0,ConfigPath().c_str())==1);}
 bool Backend::SetEnabled(bool enabled) {
-    std::lock_guard guard(mutex_);
-    if(enabled && !supported_) return false;
+    std::lock_guard configGuard(configMutex_);
+    {std::lock_guard guard(mutex_);if(enabled && !supported_) return false;}
     if(!WritePrivateProfileStringW(L"exclusive",L"enabled",enabled?L"1":L"0",ConfigPath().c_str()))return false;
-    enabled_.store(enabled,std::memory_order_release);if(!enabled)lastFault_=S_OK;++sequence_;
+    {std::lock_guard guard(mutex_);enabled_.store(enabled,std::memory_order_release);if(!enabled)lastFault_=S_OK;++sequence_;}
     Log(enabled?L"requested_exclusive":L"requested_shared");return true;
 }
-void Backend::Compatibility(bool value){std::lock_guard guard(mutex_);supported_=value;++sequence_;}
+void Backend::Compatibility(bool value){std::lock_guard configGuard(configMutex_);std::lock_guard guard(mutex_);supported_=value;++sequence_;}
 void Backend::UiReady(bool value){std::lock_guard guard(mutex_);uiReady_=value;++sequence_;}
 void Backend::OutputFault(HRESULT error){std::lock_guard guard(mutex_);lastFault_=error;++sequence_;}
 void Backend::OpenBegin(void* stream,bool exclusive) {
     std::lock_guard guard(mutex_);auto& state=streams_[stream];state={};state.exclusive=exclusive;lastFault_=S_OK;state.generation=++sequence_;
 }
 void Backend::Initialized(void* stream,HRESULT result,std::uint32_t frames,std::wstring endpoint) {
-    std::lock_guard guard(mutex_);auto& state=streams_[stream];state.lastError=result;state.frames=frames;
+    bool exclusive{};
+    {std::lock_guard guard(mutex_);auto& state=streams_[stream];state.lastError=result;state.frames=frames;
     state.endpoint=std::move(endpoint);++sequence_;
     if(FAILED(result))lastFault_=result;
-    Log(state.exclusive?L"exclusive_initialize":L"shared_initialize",result);
+    exclusive=state.exclusive;}
+    Log(exclusive?L"exclusive_initialize":L"shared_initialize",result);
 }
 void Backend::OpenEnd(void* stream,bool result,void* client,void* render,const void* rawFormat) {
-    std::lock_guard guard(mutex_);auto& state=streams_[stream];state.opened=result;
+    HRESULT error{};
+    {std::lock_guard guard(mutex_);auto& state=streams_[stream];state.opened=result;
     state.client=client;state.render=render;
     if(!result&&SUCCEEDED(state.lastError))state.lastError=E_FAIL;
     if(!result)lastFault_=state.lastError;
     if(rawFormat){auto* format=static_cast<const WAVEFORMATEX*>(rawFormat);
         state.rate=format->nSamplesPerSec;state.bits=format->wBitsPerSample;state.channels=format->nChannels;}
-    ++sequence_;Log(result?L"stream_open":L"stream_open_failed",state.lastError);
+    ++sequence_;error=state.lastError;}
+    Log(result?L"stream_open":L"stream_open_failed",error);
 }
 void Backend::Started(void* client,HRESULT result) {
-    std::lock_guard guard(mutex_);
-    for(auto& [key,state]:streams_)if(state.client==client){state.lastError=result;state.running=SUCCEEDED(result);if(FAILED(result))lastFault_=result;++sequence_;Log(L"audio_client_start",result);}
+    bool found{};{std::lock_guard guard(mutex_);
+    for(auto& [key,state]:streams_)if(state.client==client){state.lastError=result;state.running=SUCCEEDED(result);if(FAILED(result))lastFault_=result;++sequence_;found=true;}}
+    if(found)Log(L"audio_client_start",result);
 }
 void Backend::Submitted(void* render,std::uint32_t frames,HRESULT result) {
-    std::lock_guard guard(mutex_);
+    bool failed{};{std::lock_guard guard(mutex_);
     for(auto& [key,state]:streams_)if(state.render==render){
         if(SUCCEEDED(result))state.submitted+=frames;
-        else{state.lastError=result;lastFault_=result;state.running=false;++sequence_;Log(L"render_release_failed",result);}
-    }
+        else{state.lastError=result;lastFault_=result;state.running=false;++sequence_;failed=true;}
+    }}
+    if(failed)Log(L"render_release_failed",result);
 }
 void Backend::Content(void* render){std::lock_guard guard(mutex_);for(auto& [key,state]:streams_)if(state.render==render)++state.nonSilentPackets;}
-void Backend::Stopped(void* stream){std::lock_guard guard(mutex_);auto i=streams_.find(stream);if(i!=streams_.end()){i->second.running=false;++sequence_;}Log(L"stream_stop");}
-void Backend::Closed(void* stream){std::lock_guard guard(mutex_);streams_.erase(stream);++sequence_;Log(L"stream_close");}
+void Backend::Stopped(void* stream){{std::lock_guard guard(mutex_);auto i=streams_.find(stream);if(i!=streams_.end()){i->second.running=false;++sequence_;}}Log(L"stream_stop");}
+void Backend::Closed(void* stream){{std::lock_guard guard(mutex_);streams_.erase(stream);++sequence_;}Log(L"stream_close");}
 std::wstring Backend::StatusJson() {
     std::unique_lock guard(mutex_);
     bool enabled=Enabled(),pending=false,opened=false,active=false;std::uint64_t frames=0,nonSilent=0;

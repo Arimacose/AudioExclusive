@@ -66,13 +66,22 @@ function Get-ShellPath {
     if(Test-Path -LiteralPath $candidate){return $candidate}
     return (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe')
 }
-function Resolve-InstalledPackageRoot {
+function Resolve-InstalledPackageRoot([string]$ForApp=$App) {
     $recordPath=Join-Path $script:ManagerRoot 'package.json'
     $record=$null
     if(Test-Path -LiteralPath $recordPath){$record=Read-Json $recordPath}
     if($record -and $record.PSObject.Properties['path']){
         $current=Assert-Under $record.path (Join-Path $script:ManagerRoot 'packages')
-        if(Test-Path -LiteralPath (Join-Path $current 'bundle.json')){return $current}
+        if(Test-Path -LiteralPath (Join-Path $current 'bundle.json')){
+            if($ForApp -in @('NetEase','AppleMusic')){
+                $selectedState=Get-State $ForApp
+                if($selectedState -and $selectedState.PSObject.Properties['package'] -and $selectedState.package){
+                    $selectedRoot=Assert-Under $selectedState.package (Join-Path $script:ManagerRoot 'packages')
+                    if(Test-Path -LiteralPath (Join-Path $selectedRoot 'bundle.json')){return $selectedRoot}
+                }
+            }
+            return $current
+        }
         Write-Step '原插件包目录已失效，正在恢复已安装版本的启动入口。'
     }
     $candidates=New-Object 'Collections.Generic.List[string]'
@@ -103,7 +112,7 @@ function Resolve-InstalledPackageRoot {
             # rather than silently switching an existing install to older code.
             $matched=0
             foreach($name in @('NetEase','AppleMusic')){
-                if($App -ne 'All' -and $App -ne $name){continue}
+                if($ForApp -ne 'All' -and $ForApp -ne $name){continue}
                 $state=Get-State $name
                 if(-not $state -or -not $state.enabled){continue}
                 foreach($file in $meta.applications.$name.files){
@@ -426,6 +435,22 @@ function Wait-NetEaseBridge([int]$ProcessId,[datetime]$StartedAfter=[datetime]::
     throw ('网易云音频 DLL 已加载，但设置页脚本未确认启动，不能认定独占开关已就绪。日志：'+(Join-Path $env:LOCALAPPDATA ('NCExclusive\plugin-'+$ProcessId+'.jsonl')))
 }
 function Launch-Application([string]$Name,$Found=$null){
+    $previousRoot=$script:SourceRoot
+    $previousMeta=$script:Meta
+    try{
+        $script:SourceRoot=Resolve-InstalledPackageRoot $Name
+        $script:Meta=Read-Json (Join-Path $script:SourceRoot 'bundle.json')
+        foreach($file in $script:Meta.files){
+            $candidate=Assert-Under (Join-Path $script:SourceRoot $file.path) $script:SourceRoot
+            if(-not(Test-Hash $candidate $file.sha256)){throw ('应用插件包文件已改变：'+$file.path)}
+        }
+        Launch-ApplicationCore $Name $Found
+    }finally{
+        $script:SourceRoot=$previousRoot
+        $script:Meta=$previousMeta
+    }
+}
+function Launch-ApplicationCore([string]$Name,$Found=$null){
     $state=Get-State $Name
     if(-not $state -or -not $state.enabled){throw '此应用的插件未安装或已取消，请先安装。'}
     if(-not $Found){$Found=Find-Application $Name}

@@ -67,6 +67,19 @@ static void check(bool v,const char* m){if(!v)throw std::runtime_error(m);}
 static nce::Client* NewClient(){return new nce::Client(reinterpret_cast<IAudioClient*>(new Native),L"{00000000-0000-0000-0000-000000000001}",L"mock");}
 static void GuardBuffers(){for(const auto& b:driverBuffers)for(unsigned i=0;i<16;++i)check(b[i]==0xcc&&b[b.size()-1-i]==0xcc,"driver buffer overwritten");}
 int main(){try{
+ {
+    auto* invalid=new nce::Client(reinterpret_cast<IAudioClient*>(new Native),L"invalid-driver-id",L"invalid");
+    WAVEFORMATEX wave{WAVE_FORMAT_PCM,2,48000,48000*4,4,16,0};
+    check(FAILED(invalid->IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE,&wave,nullptr)),"malformed driver ID accepted");
+    check(nce::current.load()==nullptr,"failed driver load retained the global callback reservation");
+    auto* valid=NewClient();check(valid->IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE,&wave,nullptr)==S_OK,"failed driver probe blocked a valid driver");
+    invalid->Release();check(nce::current.load()==valid,"failed driver cleanup removed the active driver reservation");valid->Release();
+    auto* fresh=NewClient();IAudioClock* clock{};BYTE* packet{};
+    check(fresh->Reset()==AUDCLNT_E_NOT_INITIALIZED,"Reset accepted an uninitialized ASIO adapter");
+    check(fresh->GetService(__uuidof(IAudioClock),reinterpret_cast<void**>(&clock))==AUDCLNT_E_NOT_INITIALIZED&&clock==nullptr,"GetService exposed an uninitialized ASIO clock");
+    check(fresh->ReleaseBuffer(0,0)==AUDCLNT_E_NOT_INITIALIZED,"ReleaseBuffer accepted an uninitialized ASIO adapter");
+    check(fresh->GetBuffer(0,&packet)==AUDCLNT_E_NOT_INITIALIZED,"GetBuffer accepted an uninitialized ASIO adapter");fresh->Release();
+ }
  unsigned cases=0;std::uint64_t verifiedSamples=0;
  for(unsigned rate:{44100u,48000u,88200u,96000u,176400u,192000u})for(unsigned bits:{16u,24u,32u})for(auto layout:layouts)for(unsigned period:{64u,128u,512u,1024u}){
     outputLayout=layout;bufferPeriod=period;

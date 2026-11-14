@@ -74,11 +74,20 @@ int wmain(int argc, wchar_t** argv) {
     constexpr std::size_t sink = coordinator + offsetof(AudioCoreCoordinator, sink_);
     field("sinkState", number(sink + offsetof(WasapiExclusiveSink, state_), sizeof(std::atomic<WasapiSinkState>)));
     field("submittedFrames", number(sink + offsetof(WasapiExclusiveSink, submittedFrames_), sizeof(std::atomic<std::uint64_t>)));
+    field("committedClockFrames", number(sink + offsetof(WasapiExclusiveSink, committedClockFrames_), sizeof(std::atomic<std::uint64_t>)));
+    field("sinkRate", number(sink + offsetof(WasapiExclusiveSink, config_) + offsetof(WasapiSinkConfig, format) + offsetof(PcmFormat, sampleRate), sizeof(std::uint32_t)));
+    field("sinkClockFrequency", number(sink + offsetof(WasapiExclusiveSink, clockFrequency_), sizeof(UINT64)));
+    field("sinkWaitingForSource", number(sink + offsetof(WasapiExclusiveSink, waitingForSource_), sizeof(std::atomic<bool>)));
+    field("sinkEofSubmitted", number(sink + offsetof(WasapiExclusiveSink, endOfStreamSubmitted_), sizeof(std::atomic<bool>)));
+    field("sinkEofDrained", number(sink + offsetof(WasapiExclusiveSink, endOfStreamDrained_), sizeof(std::atomic<bool>)));
+    field("sinkRenderThread", number(sink + offsetof(WasapiExclusiveSink, renderThread_), sizeof(HANDLE)));
     const auto queueAddress = number(coordinator + offsetof(AudioCoreCoordinator, queue_), sizeof(void*));
     field("queueAddress", queueAddress);
     if (queueAddress) {
-        std::uint64_t queued = 0;
-        if (Read(process, queueAddress + offsetof(PcmQueue, queuedFrames_), &queued, sizeof(queued))) field("queuedFrames", queued);
+        std::size_t published = 0, consumed = 0;
+        if (Read(process, queueAddress + offsetof(PcmQueue, publishedFrames_), &published, sizeof(published)) &&
+            Read(process, queueAddress + offsetof(PcmQueue, consumedFrames_), &consumed, sizeof(consumed)))
+            field("queuedFrames", published > consumed ? published - consumed : 0);
     }
     std::cout << "\n}\n";
     CloseHandle(process);

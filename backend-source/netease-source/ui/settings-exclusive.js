@@ -2,7 +2,7 @@
   'use strict';
   const token = "__NCEXCLUSIVE_TOKEN__";
   if (window.__NCExclusiveDispose) window.__NCExclusiveDispose();
-  let nextId = 0, disposed = false, scheduled = false, updating = false;
+  let nextId = 0, disposed = false, scheduled = false, updating = false, animationFrame = 0;
   let latest = null, row = null, observer = null, operationError = '';
   const pending = new Map();
   function request(operation, value = '0') {
@@ -94,6 +94,7 @@
     if (note.textContent !== value) note.textContent = value;
   }
   function mount() {
+    animationFrame = 0;
     scheduled = false;
     if (disposed) return;
     if (row && !row.isConnected) row = null;
@@ -137,7 +138,7 @@
     });
     render(); request('mounted', '1').then(poll).catch(() => {});
   }
-  function schedule() {if (!scheduled && !disposed) {scheduled = true; requestAnimationFrame(mount);}}
+  function schedule() {if (!scheduled && !disposed) {scheduled = true; animationFrame = requestAnimationFrame(mount);}}
   let pollInFlight = false;
   async function poll() {
     if (disposed || pollInFlight || !row || !row.isConnected || updating) return;
@@ -154,6 +155,8 @@
     disposed = true;
     window.removeEventListener('pagehide', dispose);
     observer.disconnect(); clearInterval(timer);
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    animationFrame = 0; scheduled = false;
     for (const id of [...pending.keys()]) finish(id, null, new Error('页面已关闭'));
     if (row) row.remove();
     row = null; latest = null; observer = null;

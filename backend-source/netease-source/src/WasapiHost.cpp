@@ -84,6 +84,9 @@ class WasapiClient final:public IAudioClient,public IAudioRenderClient,public IA
         return S_OK;
     }
     HRESULT FillHardware(bool prime) {
+        const auto played=std::min<UINT64>(clockFrames_.load()-clockOffset_,physicalSubmitted_);
+        if(historyCapacity_ && physicalSubmitted_+hardwareFrames_-played>historyCapacity_)
+            return AUDCLNT_E_BUFFER_ERROR;
         BYTE* destination{};auto result=render_->GetBuffer(hardwareFrames_,&destination);
         if(FAILED(result))return result;if(!destination)return E_POINTER;
         const auto channels=canonical_.Format.nChannels;
@@ -154,7 +157,12 @@ class WasapiClient final:public IAudioClient,public IAudioRenderClient,public IA
         if(SUCCEEDED(result))result=clock_->GetFrequency(&clockFrequency_);
         if(FAILED(result)||!clockFrequency_){CloseHardware(false);return FAILED(result)?result:E_UNEXPECTED;}
         transfer_.assign(static_cast<std::size_t>(hardwareFrames_)*canonical_.Format.nChannels,0);
-        historyCapacity_=hardwareFrames_*4;history_.assign(static_cast<std::size_t>(historyCapacity_)*canonical_.Format.nChannels,0);
+        REFERENCE_TIME latency{};const auto latencyResult=audio_->GetStreamLatency(&latency);
+        const auto latencyFrames=SUCCEEDED(latencyResult)&&latency>0
+            ? static_cast<UINT64>(latency)*canonical_.Format.nSamplesPerSec/10000000ULL : 0;
+        historyCapacity_=static_cast<UINT32>(std::max<UINT64>(canonical_.Format.nSamplesPerSec/2,
+            static_cast<UINT64>(hardwareFrames_)*4+latencyFrames));
+        history_.assign(static_cast<std::size_t>(historyCapacity_)*canonical_.Format.nChannels,0);
         physicalSubmitted_=0;lastDevicePosition_=0;clockOffset_=clockFrames_.load();
         result=FillHardware(true);
         if(SUCCEEDED(result))result=audio_->Start();

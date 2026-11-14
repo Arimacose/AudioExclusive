@@ -62,14 +62,16 @@ static UInt32 Channels(AudioObjectID id,AudioObjectPropertyScope scope) {
 static bool FloatStereo(const AudioStreamBasicDescription& f,double rate) {
     return f.mFormatID==kAudioFormatLinearPCM&&(f.mFormatFlags&kAudioFormatFlagIsFloat)&&
         !(f.mFormatFlags&kAudioFormatFlagIsBigEndian)&&f.mBitsPerChannel==32&&
-        f.mChannelsPerFrame==2&&std::abs(f.mSampleRate-rate)<0.5;
+        f.mChannelsPerFrame==2&&f.mFramesPerPacket==1&&
+        f.mBytesPerFrame==((f.mFormatFlags&kAudioFormatFlagIsNonInterleaved)?4u:8u)&&
+        f.mBytesPerPacket==f.mBytesPerFrame&&std::abs(f.mSampleRate-rate)<0.5;
 }
 // Handles both interleaved and planar HAL buffers without allocating in IO.
 static bool CopyStereo(const AudioBufferList* input,AudioBufferList* output,std::uint64_t& count,bool& nonzero) {
     if(!input||!output)return false;
     unsigned inChannels=0,outChannels=0;UInt32 frames=UINT32_MAX;
-    for(UInt32 i=0;i<input->mNumberBuffers;++i){const auto& b=input->mBuffers[i];if(!b.mData||!b.mNumberChannels)return false;inChannels+=b.mNumberChannels;frames=std::min(frames,b.mDataByteSize/(4*b.mNumberChannels));}
-    for(UInt32 i=0;i<output->mNumberBuffers;++i){const auto& b=output->mBuffers[i];if(!b.mData||!b.mNumberChannels)return false;outChannels+=b.mNumberChannels;if(b.mDataByteSize/(4*b.mNumberChannels)!=frames)return false;}
+    for(UInt32 i=0;i<input->mNumberBuffers;++i){const auto& b=input->mBuffers[i];if(!b.mData||!b.mNumberChannels||b.mNumberChannels>2)return false;const UInt32 stride=4*b.mNumberChannels;if(b.mDataByteSize%stride)return false;inChannels+=b.mNumberChannels;const UInt32 count=b.mDataByteSize/stride;if(frames==UINT32_MAX)frames=count;else if(count!=frames)return false;}
+    for(UInt32 i=0;i<output->mNumberBuffers;++i){const auto& b=output->mBuffers[i];if(!b.mData||!b.mNumberChannels||b.mNumberChannels>2)return false;const UInt32 stride=4*b.mNumberChannels;if(b.mDataByteSize%stride)return false;outChannels+=b.mNumberChannels;if(b.mDataByteSize/stride!=frames)return false;}
     if(inChannels!=2||outChannels!=2)return false;
     for(UInt32 f=0;f<frames;++f){float stereo[2]{};unsigned c=0;
         for(UInt32 i=0;i<input->mNumberBuffers;++i){const auto& b=input->mBuffers[i];const auto* p=static_cast<const float*>(b.mData);for(UInt32 ch=0;ch<b.mNumberChannels;++ch){float value=p[f*b.mNumberChannels+ch];if(!std::isfinite(value))return false;stereo[c++]=value;nonzero|=value!=0;}}
@@ -154,7 +156,7 @@ struct Engine {
 - (void)applicationDidFinishLaunching:(NSNotification*)notification {
     (void)notification;
     window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,670,365) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable backing:NSBackingStoreBuffered defer:NO];
-    window.title=@"AudioExclusive 2026.11.08.1 — 外部验收版";[window center];
+    window.title=@"AudioExclusive 2026.11.14.2 — 外部验收版";[window center];
     NSView* content=window.contentView;
     NSTextField* intro=[NSTextField wrappingLabelWithString:@"Apple Music / 网易云音乐独占输出\n选择设备并开启。检测到应用暂停后释放设备，恢复播放时重新开启；关闭此窗口会恢复普通输出。"];
     intro.frame=NSMakeRect(24,280,620,65);[content addSubview:intro];
@@ -196,7 +198,7 @@ struct Engine {
     }
     if(pause.Update(activity)){engine.Stop();pause.Reset();status.stringValue=@"检测到应用暂停，设备已释放；恢复播放时自动重新开启独占。";return;}
     if(!engine.Healthy()){[self disable:nil];status.stringValue=@"设备断开、独占权丢失或音频格式改变，已停止并释放独占。";return;}
-    if([began timeIntervalSinceNow]<-10&&engine.signalPackets.load()==0){[self disable:nil];status.stringValue=@"10 秒内没有捕获到非静音音频，已释放独占。请检查播放、系统授权或内容捕获限制。";return;}
+    if([began timeIntervalSinceNow]<-10&&engine.frames.load()==0){[self disable:nil];status.stringValue=@"10 秒内没有收到音频帧，已释放独占。请检查播放、系统授权或内容捕获限制。";return;}
     status.stringValue=[NSString stringWithFormat:@"%@\n设备独占权：已确认\n输出帧：%llu；非静音包：%llu\n使用系统进程音频捕获和时钟补偿，不承诺 bit-perfect；听感及受保护内容待验收。",target,(unsigned long long)engine.frames.load(),(unsigned long long)engine.signalPackets.load()];
 }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)app{(void)app;return YES;}
@@ -207,6 +209,18 @@ int main(int argc,const char* argv[]){@autoreleasepool{
         float src[]={0.5f,-0.5f,1.0f,-1.0f},dst[4]{};AudioBufferList in{1,{{2,sizeof(src),src}}},out{1,{{2,sizeof(dst),dst}}};std::uint64_t frames=0;bool signal=false;
         if(!CopyStereo(&in,&out,frames,signal)||frames!=2||!signal||memcmp(src,dst,sizeof(src)))return 1;
         out.mBuffers[0].mDataByteSize=4;if(CopyStereo(&in,&out,frames,signal))return 2;
+        struct TwoBuffers{UInt32 count;AudioBuffer buffers[2];};
+        float left[]={0.5f,1.0f},right[]={-0.5f,-1.0f},planarOut[4]{};
+        TwoBuffers planar{2,{{1,sizeof(left),left},{1,sizeof(right),right}}};
+        AudioBufferList combined{1,{{2,sizeof(planarOut),planarOut}}};frames=0;signal=false;
+        if(!CopyStereo(reinterpret_cast<AudioBufferList*>(&planar),&combined,frames,signal)||frames!=2||memcmp(src,planarOut,sizeof(src)))return 7;
+        planar.buffers[1].mDataByteSize=sizeof(float);if(CopyStereo(reinterpret_cast<AudioBufferList*>(&planar),&combined,frames,signal))return 8;
+        planar.buffers[1].mDataByteSize=sizeof(right)-1;if(CopyStereo(reinterpret_cast<AudioBufferList*>(&planar),&combined,frames,signal))return 9;
+        planar.buffers[1].mDataByteSize=sizeof(right);combined.mBuffers[0].mDataByteSize=sizeof(planarOut)-1;if(CopyStereo(reinterpret_cast<AudioBufferList*>(&planar),&combined,frames,signal))return 10;
+        float silent[4]{};AudioBufferList silence{1,{{2,sizeof(silent),silent}}};out.mBuffers[0].mDataByteSize=sizeof(dst);frames=0;signal=false;
+        if(!CopyStereo(&silence,&out,frames,signal)||frames!=2||signal)return 11;
+        AudioStreamBasicDescription format{44100,kAudioFormatLinearPCM,kAudioFormatFlagIsFloat,8,1,8,2,32,0};
+        if(!FloatStereo(format,44100))return 12;format.mBytesPerFrame=16;if(FloatStereo(format,44100))return 13;
         PauseDebounce pause;
         if(pause.Update(PlaybackActivity::Idle)||!pause.Update(PlaybackActivity::Idle))return 3;
         if(pause.Update(PlaybackActivity::Running)||pause.Update(PlaybackActivity::Idle))return 4;

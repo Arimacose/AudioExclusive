@@ -37,6 +37,7 @@ public:
     void Closed(void* stream);
     std::wstring StatusJson();
 private:
+    std::mutex configMutex_;
     std::mutex mutex_;
     std::atomic<bool> enabled_{};
     bool supported_{},uiReady_{};

@@ -4427,6 +4427,7 @@ void AudioCoreRuntimeEventCallback(void* context,
             L" acceptedFrames=" + std::to_wstring(tap.acceptedFrames) +
             L" bufferedFrames=" + std::to_wstring(stats.bufferedFrames) +
             L" submittedFrames=" + std::to_wstring(sink.submittedFrames) +
+            L" committedClockFrames=" + std::to_wstring(sink.committedClockFrames) +
             L" submittedBuffers=" + std::to_wstring(sink.submittedBuffers) +
             L" controlledSilenceFrames=" + std::to_wstring(sink.controlledSilenceFrames) +
             L" sourceWaits=" + std::to_wstring(sink.sourceWaits) +
